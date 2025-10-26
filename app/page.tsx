@@ -1,18 +1,24 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Plus, X, Repeat, Search, List, Music } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Plus, X, Repeat, Search, List, Music, FolderPlus, Trash2, Edit2, Check } from 'lucide-react';
 
-// Tipos
+// Tipos para el estado
 type RepeatMode = 'none' | 'all' | 'one';
 interface Song {
   id: number;
   name: string;
-  url: string;
-  file: File;
+  url?: string;
+  file?: File;
+}
+interface Playlist {
+  id: number;
+  name: string;
+  songs: Song[];
 }
 
 export default function MusicPlayer() {
-  const [songs, setSongs] = useState<Song[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [currentPlaylistId, setCurrentPlaylistId] = useState<number | null>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -20,8 +26,90 @@ export default function MusicPlayer() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showPlaylist, setShowPlaylist] = useState<boolean>(true);
+  const [showNewPlaylistModal, setShowNewPlaylistModal] = useState<boolean>(false);
+  const [newPlaylistName, setNewPlaylistName] = useState<string>('');
+  const [editingPlaylistId, setEditingPlaylistId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Cargar datos al iniciar
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Guardar datos cuando cambien las playlists
+  useEffect(() => {
+    if (playlists.length > 0) {
+      saveData();
+    }
+  }, [playlists]);
+
+  const loadData = async () => {
+    try {
+      let stored: string | null = null;
+      const w: any = typeof window !== 'undefined' ? (window as any) : undefined;
+      if (w && w.storage && typeof w.storage.get === 'function') {
+        const result = await w.storage.get('music-player-data');
+        stored = result?.value ?? null;
+      } else if (typeof localStorage !== 'undefined') {
+        stored = localStorage.getItem('music-player-data');
+      }
+      if (stored) {
+        const data = JSON.parse(stored);
+        const playlistsWithUrls: Playlist[] = data.playlists.map((playlist: Playlist) => ({
+          ...playlist,
+          songs: playlist.songs.map((song: Song) => ({
+            ...song,
+          }))
+        }));
+        setPlaylists(playlistsWithUrls);
+        setCurrentPlaylistId(data.currentPlaylistId as number | null);
+      } else {
+        const defaultPlaylist: Playlist = {
+          id: Date.now(),
+          name: 'Mi Música',
+          songs: []
+        };
+        setPlaylists([defaultPlaylist]);
+        setCurrentPlaylistId(defaultPlaylist.id);
+      }
+    } catch (_error) {
+      const defaultPlaylist: Playlist = {
+        id: Date.now(),
+        name: 'Mi Música',
+        songs: []
+      };
+      setPlaylists([defaultPlaylist]);
+      setCurrentPlaylistId(defaultPlaylist.id);
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      const dataToSave = {
+        playlists: playlists.map(playlist => ({
+          ...playlist,
+          songs: playlist.songs.map(song => ({
+            id: song.id,
+            name: song.name,
+          }))
+        })),
+        currentPlaylistId
+      };
+      const w: any = typeof window !== 'undefined' ? (window as any) : undefined;
+      if (w && w.storage && typeof w.storage.set === 'function') {
+        await w.storage.set('music-player-data', JSON.stringify(dataToSave));
+      } else if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('music-player-data', JSON.stringify(dataToSave));
+      }
+    } catch (error) {
+      console.error('Error guardando datos:', error);
+    }
+  };
+
+  const currentPlaylist = playlists.find(p => p.id === currentPlaylistId);
+  const songs = currentPlaylist?.songs || [];
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -59,7 +147,49 @@ export default function MusicPlayer() {
       url: URL.createObjectURL(file),
       file: file
     }));
-    setSongs(prev => [...prev, ...newSongs]);
+    setPlaylists(prev => prev.map(playlist =>
+      playlist.id === currentPlaylistId
+        ? { ...playlist, songs: [...playlist.songs, ...newSongs] }
+        : playlist
+    ));
+  };
+
+  const createPlaylist = () => {
+    if (!newPlaylistName.trim()) return;
+    
+    const newPlaylist = {
+      id: Date.now(),
+      name: newPlaylistName.trim(),
+      songs: []
+    };
+    
+    setPlaylists(prev => [...prev, newPlaylist]);
+    setCurrentPlaylistId(newPlaylist.id);
+    setNewPlaylistName('');
+    setShowNewPlaylistModal(false);
+  };
+
+  const deletePlaylist = (id: number) => {
+    if (playlists.length === 1) return; // No eliminar la última playlist
+    
+    const newPlaylists = playlists.filter(p => p.id !== id);
+    setPlaylists(newPlaylists);
+    
+    if (currentPlaylistId === id) {
+      setCurrentPlaylistId(newPlaylists[0].id);
+      setCurrentSongIndex(0);
+      setIsPlaying(false);
+    }
+  };
+
+  const renamePlaylist = (id: number) => {
+    if (!editingName.trim()) return;
+    
+    setPlaylists(prev => prev.map(p => 
+      p.id === id ? { ...p, name: editingName.trim() } : p
+    ));
+    setEditingPlaylistId(null);
+    setEditingName('');
   };
 
   const togglePlay = () => {
@@ -96,8 +226,12 @@ export default function MusicPlayer() {
   };
 
   const removeSong = (id: number) => {
-    const newSongs = songs.filter(song => song.id !== id);
-    setSongs(newSongs);
+    setPlaylists(prev => prev.map(playlist => 
+      playlist.id === currentPlaylistId
+        ? { ...playlist, songs: playlist.songs.filter(song => song.id !== id) }
+        : playlist
+    ));
+    
     if (songs[currentSongIndex]?.id === id) {
       setCurrentSongIndex(0);
       setIsPlaying(false);
@@ -136,15 +270,98 @@ export default function MusicPlayer() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6 flex items-center justify-center">
-      <div className="w-full max-w-6xl">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="w-full max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sidebar de Playlists */}
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 lg:col-span-1">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Mis Listas</h2>
+              <button
+                onClick={() => setShowNewPlaylistModal(true)}
+                className="p-2 bg-purple-500 hover:bg-purple-600 rounded-lg transition-all"
+              >
+                <FolderPlus className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+              {playlists.map(playlist => (
+                <div
+                  key={playlist.id}
+                  className={`p-4 rounded-xl transition-all cursor-pointer ${
+                    playlist.id === currentPlaylistId
+                      ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-400/50'
+                      : 'bg-white/5 hover:bg-white/10'
+                  }`}
+                  onClick={() => {
+                    setCurrentPlaylistId(playlist.id);
+                    setCurrentSongIndex(0);
+                    setIsPlaying(false);
+                  }}
+                >
+                  {editingPlaylistId === playlist.id ? (
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && renamePlaylist(playlist.id)}
+                        className="flex-1 bg-white/20 border border-white/30 rounded-lg px-2 py-1 text-white text-sm focus:outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => renamePlaylist(playlist.id)}
+                        className="p-1 bg-green-500 rounded-lg hover:bg-green-600"
+                      >
+                        <Check className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-medium truncate">{playlist.name}</h3>
+                        <p className="text-white/60 text-sm">{playlist.songs.length} canciones</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPlaylistId(playlist.id);
+                            setEditingName(playlist.name);
+                          }}
+                          className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
+                        >
+                          <Edit2 className="w-4 h-4 text-white/70" />
+                        </button>
+                        {playlists.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePlaylist(playlist.id);
+                            }}
+                            className="p-1.5 hover:bg-red-500/20 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Player Principal */}
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20 lg:col-span-2">
             <div className="flex items-center justify-between mb-8">
-              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                <Music className="w-8 h-8" />
-                Mi Reproductor
-              </h1>
+              <div>
+                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                  <Music className="w-8 h-8" />
+                  {currentPlaylist?.name || 'Mi Reproductor'}
+                </h1>
+                <p className="text-white/60 text-sm mt-1">{songs.length} canciones en total</p>
+              </div>
               <button
                 onClick={() => setShowPlaylist(!showPlaylist)}
                 className="lg:hidden p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all"
@@ -155,7 +372,7 @@ export default function MusicPlayer() {
 
             {/* Album Art */}
             <div className="relative mb-8 group">
-              <div className="w-full aspect-square bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
+              <div className="w-full aspect-square max-w-md mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
                 {currentSong ? (
                   <div className="text-center p-8">
                     <Music className="w-32 h-32 text-white/80 mx-auto mb-4 animate-pulse" />
@@ -178,7 +395,7 @@ export default function MusicPlayer() {
               >
                 <div
                   className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all group-hover:h-3"
-                  style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                  style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
                 />
               </div>
               <div className="flex justify-between text-sm text-white/70 mt-2">
@@ -241,23 +458,6 @@ export default function MusicPlayer() {
               </button>
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              multiple
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </div>
-
-          {/* Playlist */}
-          <div className={`bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20 ${!showPlaylist && 'hidden lg:block'}`}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">Lista de Reproducción</h2>
-              <span className="text-white/70">{songs.length} canciones</span>
-            </div>
-
             {/* Search */}
             <div className="relative mb-6">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
@@ -271,7 +471,7 @@ export default function MusicPlayer() {
             </div>
 
             {/* Songs List */}
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
               {filteredSongs.length > 0 ? (
                 filteredSongs.map((song, index) => {
                   const actualIndex = songs.findIndex(s => s.id === song.id);
@@ -313,11 +513,56 @@ export default function MusicPlayer() {
                 </div>
               )}
             </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+            />
           </div>
         </div>
 
         <audio ref={audioRef} src={currentSong?.url} />
       </div>
+
+      {/* Modal Nueva Playlist */}
+      {showNewPlaylistModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-purple-900 to-indigo-900 rounded-2xl p-8 max-w-md w-full border border-white/20 shadow-2xl">
+            <h3 className="text-2xl font-bold text-white mb-4">Nueva Lista de Reproducción</h3>
+            <input
+              type="text"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && createPlaylist()}
+              placeholder="Nombre de la lista..."
+              className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all mb-6"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowNewPlaylistModal(false);
+                  setNewPlaylistName('');
+                }}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={createPlaylist}
+                disabled={!newPlaylistName.trim()}
+                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-3 rounded-xl transition-all disabled:opacity-50"
+              >
+                Crear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar {
