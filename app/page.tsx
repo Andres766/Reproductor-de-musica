@@ -209,7 +209,7 @@ export default function MusicPlayer() {
   const removeSong = (id: number) => {
     setPlaylists(prev => prev.map(playlist => 
       playlist.id === currentPlaylistId
-        ? { ...playlist, songs: playlist.songs.filter(song => song.id !== id) }
+        ? { ...playlist, songs: playlist.songs.filter((song: any) => song.id !== id) }
         : playlist
     ));
     
@@ -336,7 +336,7 @@ export default function MusicPlayer() {
                   {/* Canciones dentro de cada playlist */}
                   {playlist.songs.length > 0 && (
                     <div className="px-4 pb-4 space-y-1">
-                      {playlist.songs.slice(0, 3).map((song) => (
+                      {playlist.songs.slice(0, 3).map((song: any) => (
                         <div
                           key={song.id}
                           className="flex items-center gap-2 p-2 rounded-lg bg-white/5 text-white/70 text-sm"
@@ -486,7 +486,7 @@ export default function MusicPlayer() {
               {/* Songs List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                 {filteredSongs.length > 0 ? (
-                  filteredSongs.map((song, index) => {
+                  filteredSongs.map((song: any, index: number) => {
                     const actualIndex = songs.findIndex((s: any) => s.id === song.id);
                     const isCurrentSong = actualIndex === currentSongIndex;
                     return (
