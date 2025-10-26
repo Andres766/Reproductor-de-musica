@@ -78,8 +78,6 @@ export default function MusicPlayer() {
         await w.storage.set('music-player-data', payload);
       } else if (typeof localStorage !== 'undefined') {
         localStorage.setItem('music-player-data', payload);
-      } else {
-        console.warn('No hay almacenamiento disponible para persistir datos');
       }
     } catch (error) {
       console.error('Error guardando datos:', error);
