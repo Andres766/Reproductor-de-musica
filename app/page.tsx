@@ -369,6 +369,18 @@ export default function MusicPlayer() {
                 </div>
               </div>
 
+              {/* Barra de Búsqueda */}
+              <div className="relative mb-6">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+                <input
+                  type="text"
+                  placeholder="Buscar canciones..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
+                />
+              </div>
+
               {/* Album Art */}
               <div className="relative mb-6 group">
                 <div className="w-full aspect-video max-w-2xl mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
@@ -469,18 +481,6 @@ export default function MusicPlayer() {
 
             {/* Lista de Canciones */}
             <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20">
-              {/* Search */}
-              <div className="relative mb-4">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
-                <input
-                  type="text"
-                  placeholder="Buscar canciones..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
-                />
-              </div>
-
               {/* Songs List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                 {filteredSongs.length > 0 ? (
