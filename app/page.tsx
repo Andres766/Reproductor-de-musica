@@ -1,31 +1,16 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Plus, X, Repeat, Search, List, Music, FolderPlus, Trash2, Edit2, Check } from 'lucide-react';
-
-// Tipos para el estado
-type RepeatMode = 'none' | 'all' | 'one';
-interface Song {
-  id: number;
-  name: string;
-  url?: string;
-  file?: File;
-}
-interface Playlist {
-  id: number;
-  name: string;
-  songs: Song[];
-}
+import { Play, Pause, SkipForward, SkipBack, Plus, X, Repeat, Search, Music, FolderPlus, Trash2, Edit2, Check } from 'lucide-react';
 
 export default function MusicPlayer() {
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlists, setPlaylists] = useState<any[]>([]);
   const [currentPlaylistId, setCurrentPlaylistId] = useState<number | null>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
+  const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showPlaylist, setShowPlaylist] = useState<boolean>(true);
   const [showNewPlaylistModal, setShowNewPlaylistModal] = useState<boolean>(false);
   const [newPlaylistName, setNewPlaylistName] = useState<string>('');
   const [editingPlaylistId, setEditingPlaylistId] = useState<number | null>(null);
@@ -47,26 +32,21 @@ export default function MusicPlayer() {
 
   const loadData = async () => {
     try {
-      let stored: string | null = null;
-      const w: any = typeof window !== 'undefined' ? (window as any) : undefined;
-      if (w && w.storage && typeof w.storage.get === 'function') {
+      const w = window as any;
+      let raw: string | null = null;
+      if (w.storage && typeof w.storage.get === 'function') {
         const result = await w.storage.get('music-player-data');
-        stored = result?.value ?? null;
+        raw = result?.value ?? null;
       } else if (typeof localStorage !== 'undefined') {
-        stored = localStorage.getItem('music-player-data');
+        raw = localStorage.getItem('music-player-data');
       }
-      if (stored) {
-        const data = JSON.parse(stored);
-        const playlistsWithUrls: Playlist[] = data.playlists.map((playlist: Playlist) => ({
-          ...playlist,
-          songs: playlist.songs.map((song: Song) => ({
-            ...song,
-          }))
-        }));
-        setPlaylists(playlistsWithUrls);
-        setCurrentPlaylistId(data.currentPlaylistId as number | null);
+      if (raw) {
+        const data = JSON.parse(raw);
+        setPlaylists(data.playlists || []);
+        setCurrentPlaylistId(data.currentPlaylistId ?? null);
       } else {
-        const defaultPlaylist: Playlist = {
+        // Crear playlist por defecto si no hay datos
+        const defaultPlaylist = {
           id: Date.now(),
           name: 'Mi Música',
           songs: []
@@ -74,8 +54,9 @@ export default function MusicPlayer() {
         setPlaylists([defaultPlaylist]);
         setCurrentPlaylistId(defaultPlaylist.id);
       }
-    } catch (_error) {
-      const defaultPlaylist: Playlist = {
+    } catch (error) {
+      // Si no existe, crear playlist por defecto
+      const defaultPlaylist = {
         id: Date.now(),
         name: 'Mi Música',
         songs: []
@@ -88,20 +69,17 @@ export default function MusicPlayer() {
   const saveData = async () => {
     try {
       const dataToSave = {
-        playlists: playlists.map(playlist => ({
-          ...playlist,
-          songs: playlist.songs.map(song => ({
-            id: song.id,
-            name: song.name,
-          }))
-        })),
+        playlists: playlists,
         currentPlaylistId
       };
-      const w: any = typeof window !== 'undefined' ? (window as any) : undefined;
-      if (w && w.storage && typeof w.storage.set === 'function') {
-        await w.storage.set('music-player-data', JSON.stringify(dataToSave));
+      const w = window as any;
+      const payload = JSON.stringify(dataToSave);
+      if (w.storage && typeof w.storage.set === 'function') {
+        await w.storage.set('music-player-data', payload);
       } else if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('music-player-data', JSON.stringify(dataToSave));
+        localStorage.setItem('music-player-data', payload);
+      } else {
+        console.warn('No hay almacenamiento disponible para persistir datos');
       }
     } catch (error) {
       console.error('Error guardando datos:', error);
@@ -115,8 +93,8 @@ export default function MusicPlayer() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const updateTime = () => setCurrentTime(audio.currentTime || 0);
-    const updateDuration = () => setDuration(audio.duration || 0);
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateDuration = () => setDuration(audio.duration);
     const handleEnded = () => {
       if (repeatMode === 'one') {
         audio.currentTime = 0;
@@ -141,13 +119,14 @@ export default function MusicPlayer() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const newSongs: Song[] = files.map(file => ({
+    const newSongs = files.map(file => ({
       id: Date.now() + Math.random(),
       name: file.name.replace(/\.[^/.]+$/, ""),
       url: URL.createObjectURL(file),
       file: file
     }));
-    setPlaylists(prev => prev.map(playlist =>
+    
+    setPlaylists(prev => prev.map(playlist => 
       playlist.id === currentPlaylistId
         ? { ...playlist, songs: [...playlist.songs, ...newSongs] }
         : playlist
@@ -167,10 +146,12 @@ export default function MusicPlayer() {
     setCurrentPlaylistId(newPlaylist.id);
     setNewPlaylistName('');
     setShowNewPlaylistModal(false);
+    setCurrentSongIndex(0);
+    setIsPlaying(false);
   };
 
   const deletePlaylist = (id: number) => {
-    if (playlists.length === 1) return; // No eliminar la última playlist
+    if (playlists.length === 1) return;
     
     const newPlaylists = playlists.filter(p => p.id !== id);
     setPlaylists(newPlaylists);
@@ -193,11 +174,11 @@ export default function MusicPlayer() {
   };
 
   const togglePlay = () => {
-    if (!songs.length || !audioRef.current) return;
+    if (!songs.length) return;
     if (isPlaying) {
-      audioRef.current.pause();
+      audioRef.current?.pause();
     } else {
-      audioRef.current.play();
+      audioRef.current?.play();
     }
     setIsPlaying(!isPlaying);
   };
@@ -244,7 +225,7 @@ export default function MusicPlayer() {
   };
 
   const toggleRepeat = () => {
-    const modes: RepeatMode[] = ['none', 'all', 'one'];
+    const modes: Array<'none' | 'all' | 'one'> = ['none', 'all', 'one'];
     const currentIndex = modes.indexOf(repeatMode);
     setRepeatMode(modes[(currentIndex + 1) % modes.length]);
   };
@@ -256,15 +237,15 @@ export default function MusicPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const filteredSongs = songs.filter(song =>
+  const filteredSongs = songs.filter((song: any) =>
     song.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   useEffect(() => {
-    if (songs.length > 0 && isPlaying && audioRef.current) {
-      audioRef.current.play();
+    if (songs.length > 0 && isPlaying) {
+      audioRef.current?.play();
     }
-  }, [currentSongIndex, songs.length, isPlaying]);
+  }, [currentSongIndex]);
 
   const currentSong = songs[currentSongIndex];
 
@@ -284,67 +265,91 @@ export default function MusicPlayer() {
               </button>
             </div>
 
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto pr-2 custom-scrollbar">
               {playlists.map(playlist => (
                 <div
                   key={playlist.id}
-                  className={`p-4 rounded-xl transition-all cursor-pointer ${
+                  className={`rounded-xl transition-all ${
                     playlist.id === currentPlaylistId
                       ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-400/50'
                       : 'bg-white/5 hover:bg-white/10'
                   }`}
-                  onClick={() => {
-                    setCurrentPlaylistId(playlist.id);
-                    setCurrentSongIndex(0);
-                    setIsPlaying(false);
-                  }}
                 >
-                  {editingPlaylistId === playlist.id ? (
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && renamePlaylist(playlist.id)}
-                        className="flex-1 bg-white/20 border border-white/30 rounded-lg px-2 py-1 text-white text-sm focus:outline-none"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => renamePlaylist(playlist.id)}
-                        className="p-1 bg-green-500 rounded-lg hover:bg-green-600"
-                      >
-                        <Check className="w-4 h-4 text-white" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-white font-medium truncate">{playlist.name}</h3>
-                        <p className="text-white/60 text-sm">{playlist.songs.length} canciones</p>
-                      </div>
-                      <div className="flex items-center gap-1">
+                  <div
+                    className="p-4 cursor-pointer"
+                    onClick={() => {
+                      setCurrentPlaylistId(playlist.id);
+                      setCurrentSongIndex(0);
+                      setIsPlaying(false);
+                    }}
+                  >
+                    {editingPlaylistId === playlist.id ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && renamePlaylist(playlist.id)}
+                          className="flex-1 bg-white/20 border border-white/30 rounded-lg px-2 py-1 text-white text-sm focus:outline-none"
+                          autoFocus
+                        />
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingPlaylistId(playlist.id);
-                            setEditingName(playlist.name);
-                          }}
-                          className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
+                          onClick={() => renamePlaylist(playlist.id)}
+                          className="p-1 bg-green-500 rounded-lg hover:bg-green-600"
                         >
-                          <Edit2 className="w-4 h-4 text-white/70" />
+                          <Check className="w-4 h-4 text-white" />
                         </button>
-                        {playlists.length > 1 && (
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-medium truncate">{playlist.name}</h3>
+                          <p className="text-white/60 text-sm">{playlist.songs.length} canciones</p>
+                        </div>
+                        <div className="flex items-center gap-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              deletePlaylist(playlist.id);
+                              setEditingPlaylistId(playlist.id);
+                              setEditingName(playlist.name);
                             }}
-                            className="p-1.5 hover:bg-red-500/20 rounded-lg transition-all"
+                            className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
                           >
-                            <Trash2 className="w-4 h-4 text-red-400" />
+                            <Edit2 className="w-4 h-4 text-white/70" />
                           </button>
-                        )}
+                          {playlists.length > 1 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePlaylist(playlist.id);
+                              }}
+                              className="p-1.5 hover:bg-red-500/20 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-400" />
+                            </button>
+                          )}
+                        </div>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Canciones dentro de cada playlist */}
+                  {playlist.songs.length > 0 && (
+                    <div className="px-4 pb-4 space-y-1">
+                      {playlist.songs.slice(0, 3).map((song) => (
+                        <div
+                          key={song.id}
+                          className="flex items-center gap-2 p-2 rounded-lg bg-white/5 text-white/70 text-sm"
+                        >
+                          <Music className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{song.name}</span>
+                        </div>
+                      ))}
+                      {playlist.songs.length > 3 && (
+                        <p className="text-white/50 text-xs pl-2">
+                          +{playlist.songs.length - 3} más
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -352,176 +357,176 @@ export default function MusicPlayer() {
             </div>
           </div>
 
-          {/* Player Principal */}
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20 lg:col-span-2">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                  <Music className="w-8 h-8" />
-                  {currentPlaylist?.name || 'Mi Reproductor'}
-                </h1>
-                <p className="text-white/60 text-sm mt-1">{songs.length} canciones en total</p>
+          {/* Player y Lista de Reproducción */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Player Principal */}
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                    <Music className="w-8 h-8" />
+                    {currentPlaylist?.name || 'Mi Reproductor'}
+                  </h1>
+                  <p className="text-white/60 text-sm mt-1">{songs.length} canciones en total</p>
+                </div>
               </div>
-              <button
-                onClick={() => setShowPlaylist(!showPlaylist)}
-                className="lg:hidden p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all"
-              >
-                <List className="w-6 h-6 text-white" />
-              </button>
-            </div>
 
-            {/* Album Art */}
-            <div className="relative mb-8 group">
-              <div className="w-full aspect-square max-w-md mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
-                {currentSong ? (
-                  <div className="text-center p-8">
-                    <Music className="w-32 h-32 text-white/80 mx-auto mb-4 animate-pulse" />
-                    <h2 className="text-2xl font-bold text-white">{currentSong.name}</h2>
-                  </div>
-                ) : (
-                  <div className="text-center p-8">
-                    <Music className="w-32 h-32 text-white/50 mx-auto mb-4" />
-                    <p className="text-white/70">No hay canciones</p>
-                  </div>
-                )}
+              {/* Album Art */}
+              <div className="relative mb-6 group">
+                <div className="w-full aspect-video max-w-2xl mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
+                  {currentSong ? (
+                    <div className="text-center p-8">
+                      <Music className="w-24 h-24 text-white/80 mx-auto mb-4 animate-pulse" />
+                      <h2 className="text-2xl font-bold text-white">{currentSong.name}</h2>
+                    </div>
+                  ) : (
+                    <div className="text-center p-8">
+                      <Music className="w-24 h-24 text-white/50 mx-auto mb-4" />
+                      <p className="text-white/70">No hay canciones</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Progress Bar */}
-            <div className="mb-6">
-              <div
-                onClick={handleSeek}
-                className="w-full h-2 bg-white/20 rounded-full cursor-pointer overflow-hidden group"
-              >
+              {/* Progress Bar */}
+              <div className="mb-6">
                 <div
-                  className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all group-hover:h-3"
-                  style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
-                />
+                  onClick={handleSeek}
+                  className="w-full h-2 bg-white/20 rounded-full cursor-pointer overflow-hidden group"
+                >
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all group-hover:h-3"
+                    style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-sm text-white/70 mt-2">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm text-white/70 mt-2">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
+
+              {/* Controls */}
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={toggleRepeat}
+                  className={`p-3 rounded-full transition-all relative ${
+                    repeatMode !== 'none'
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}
+                >
+                  <Repeat className="w-5 h-5" />
+                  {repeatMode === 'one' && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-pink-500 rounded-full flex items-center justify-center text-xs font-bold">
+                      1
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={handlePrevious}
+                  disabled={!songs.length}
+                  className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all disabled:opacity-50"
+                >
+                  <SkipBack className="w-6 h-6 text-white" />
+                </button>
+
+                <button
+                  onClick={togglePlay}
+                  disabled={!songs.length}
+                  className="p-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full hover:scale-110 transition-all shadow-lg disabled:opacity-50"
+                >
+                  {isPlaying ? (
+                    <Pause className="w-8 h-8 text-white" />
+                  ) : (
+                    <Play className="w-8 h-8 text-white ml-1" />
+                  )}
+                </button>
+
+                <button
+                  onClick={handleNext}
+                  disabled={!songs.length}
+                  className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all disabled:opacity-50"
+                >
+                  <SkipForward className="w-6 h-6 text-white" />
+                </button>
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all"
+                >
+                  <Plus className="w-5 h-5 text-white" />
+                </button>
               </div>
-            </div>
 
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <button
-                onClick={toggleRepeat}
-                className={`p-3 rounded-full transition-all relative ${
-                  repeatMode !== 'none'
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20'
-                }`}
-              >
-                <Repeat className="w-5 h-5" />
-                {repeatMode === 'one' && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-pink-500 rounded-full flex items-center justify-center text-xs font-bold">
-                    1
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={handlePrevious}
-                disabled={!songs.length}
-                className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all disabled:opacity-50"
-              >
-                <SkipBack className="w-6 h-6 text-white" />
-              </button>
-
-              <button
-                onClick={togglePlay}
-                disabled={!songs.length}
-                className="p-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full hover:scale-110 transition-all shadow-lg disabled:opacity-50"
-              >
-                {isPlaying ? (
-                  <Pause className="w-8 h-8 text-white" />
-                ) : (
-                  <Play className="w-8 h-8 text-white ml-1" />
-                )}
-              </button>
-
-              <button
-                onClick={handleNext}
-                disabled={!songs.length}
-                className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all disabled:opacity-50"
-              >
-                <SkipForward className="w-6 h-6 text-white" />
-              </button>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all"
-              >
-                <Plus className="w-5 h-5 text-white" />
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="relative mb-6">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
               <input
-                type="text"
-                placeholder="Buscar canciones..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
               />
             </div>
 
-            {/* Songs List */}
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-              {filteredSongs.length > 0 ? (
-                filteredSongs.map((song, index) => {
-                  const actualIndex = songs.findIndex(s => s.id === song.id);
-                  const isCurrentSong = actualIndex === currentSongIndex;
-                  return (
-                    <div
-                      key={song.id}
-                      className={`flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer ${
-                        isCurrentSong
-                          ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-400/50'
-                          : 'bg-white/5 hover:bg-white/10'
-                      }`}
-                      onClick={() => playSong(actualIndex)}
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center ${isCurrentSong && isPlaying ? 'animate-pulse' : ''}`}>
-                          <Music className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-white font-medium truncate">{song.name}</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSong(song.id);
-                        }}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition-all"
-                      >
-                        <X className="w-4 h-4 text-red-400" />
-                      </button>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-12">
-                  <Music className="w-16 h-16 text-white/30 mx-auto mb-4" />
-                  <p className="text-white/50">
-                    {searchQuery ? 'No se encontraron canciones' : 'Agrega canciones para empezar'}
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Lista de Canciones */}
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20">
+              {/* Search */}
+              <div className="relative mb-4">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+                <input
+                  type="text"
+                  placeholder="Buscar canciones..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
+                />
+              </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              multiple
-              onChange={handleFileUpload}
-              className="hidden"
-            />
+              {/* Songs List */}
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {filteredSongs.length > 0 ? (
+                  filteredSongs.map((song, index) => {
+                    const actualIndex = songs.findIndex((s: any) => s.id === song.id);
+                    const isCurrentSong = actualIndex === currentSongIndex;
+                    return (
+                      <div
+                        key={song.id}
+                        className={`flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer ${
+                          isCurrentSong
+                            ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-purple-400/50'
+                            : 'bg-white/5 hover:bg-white/10'
+                        }`}
+                        onClick={() => playSong(actualIndex)}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center ${isCurrentSong && isPlaying ? 'animate-pulse' : ''}`}>
+                            <Music className="w-5 h-5 text-white" />
+                          </div>
+                          <span className="text-white font-medium truncate">{song.name}</span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSong(song.id);
+                          }}
+                          className="p-2 hover:bg-red-500/20 rounded-lg transition-all"
+                        >
+                          <X className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-12">
+                    <Music className="w-16 h-16 text-white/30 mx-auto mb-4" />
+                    <p className="text-white/50">
+                      {searchQuery ? 'No se encontraron canciones' : 'Agrega canciones para empezar'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
