@@ -17,6 +17,12 @@ export default function MusicPlayer() {
   const [editingName, setEditingName] = useState<string>('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Refs para animación reactiva al audio
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const reactiveInitRef = useRef<boolean>(false);
 
   // Cargar datos al iniciar
   useEffect(() => {
@@ -245,12 +251,98 @@ export default function MusicPlayer() {
     }
   }, [currentSongIndex]);
 
+  // Inicializar AudioContext y Analyser cuando exista el elemento audio
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!reactiveInitRef.current) {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.85;
+        const source = ctx.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        audioCtxRef.current = ctx;
+        analyserRef.current = analyser;
+        sourceNodeRef.current = source;
+        reactiveInitRef.current = true;
+      } catch (err) {
+        console.warn('AudioContext init failed', err);
+      }
+    }
+  }, [audioRef.current]);
+
+  // Funciones para animación reactiva
+  const startAudioReactive = () => {
+    const ctx = audioCtxRef.current;
+    const analyser = analyserRef.current;
+    if (!ctx || !analyser) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const loop = () => {
+      analyser.getByteFrequencyData(data);
+      const bassBins = Math.max(1, Math.floor(data.length * 0.1));
+      let bassSum = 0;
+      for (let i = 0; i < bassBins; i++) bassSum += data[i];
+      const bassEnergy = bassSum / (bassBins * 255);
+      const icons = document.querySelectorAll('.floating-icons .floating-icon') as NodeListOf<HTMLElement>;
+      const now = Date.now() / 1000;
+      icons.forEach((el, i) => {
+        const phase = Math.sin(now + i * 0.6);
+        const scale = 1 + bassEnergy * 0.25 + phase * 0.02;
+        const tx = phase * 8;
+        const ty = Math.cos(now * 0.7 + i) * 6;
+        el.style.transform = `translateY(${ty.toFixed(2)}px) translateX(${tx.toFixed(2)}px) scale(${scale.toFixed(3)}) rotate(${(phase * 4).toFixed(2)}deg)`;
+        el.style.opacity = `${Math.min(0.7, 0.35 + bassEnergy * 0.4).toFixed(2)}`;
+      });
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(loop);
+  };
+
+  const stopAudioReactive = () => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  };
+
+  // Arrancar/parar animación según estado de reproducción
+  useEffect(() => {
+    if (isPlaying) {
+      startAudioReactive();
+    } else {
+      stopAudioReactive();
+    }
+    return () => stopAudioReactive();
+  }, [isPlaying, currentSongIndex]);
+
   const currentSong = songs[currentSongIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6 flex items-center justify-center">
-      <div className="w-full max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="min-h-screen p-6 flex items-center justify-center relative">
+      <div className="simple-bg"></div>
+      <div className="floating-icons">
+        <div className="floating-icon icon-note"></div>
+        <div className="floating-icon icon-vinyl"></div>
+        <div className="floating-icon icon-headphones"></div>
+        <div className="floating-icon icon-eq"></div>
+      </div>
+         <div className="w-full max-w-7xl relative z-10">
+            {/* Barra de Búsqueda global arriba */}
+            <div className="relative mb-6">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+              <input
+                type="text"
+                placeholder="Buscar canciones..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
+              />
+            </div>
+         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Sidebar de Playlists */}
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 lg:col-span-1">
             <div className="flex items-center justify-between mb-6">
@@ -367,18 +459,6 @@ export default function MusicPlayer() {
                   </h1>
                   <p className="text-white/60 text-sm mt-1">{songs.length} canciones en total</p>
                 </div>
-              </div>
-
-              {/* Barra de Búsqueda */}
-              <div className="relative mb-6">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
-                <input
-                  type="text"
-                  placeholder="Buscar canciones..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
-                />
               </div>
 
               {/* Album Art */}
@@ -567,22 +647,9 @@ export default function MusicPlayer() {
         </div>
       )}
 
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
+
     </div>
   );
+
+
 }

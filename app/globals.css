@@ -24,3 +24,98 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Fondo animado mejorado */
+.simple-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(147, 51, 234, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.25) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(59, 130, 246, 0.25) 0%, transparent 50%),
+    linear-gradient(135deg, #1b1f3b 0%, #0f172a 100%);
+  background-size: 300% 300%;
+  animation: bgMove 20s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes bgMove {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+/* Íconos flotantes */
+.floating-icons {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0; /* detrás del contenido (contenido usa z-10) */
+}
+
+.floating-icon {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.4; /* sutil por defecto */
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 12px rgba(255,255,255,0.28));
+}
+
+/* Íconos temáticos de música */
+.icon-note {
+  background-image: url('/music-note.svg');
+  top: 6%;
+  left: 5%;
+  animation: float1 9s ease-in-out infinite;
+}
+.icon-vinyl {
+  background-image: url('/vinyl.svg');
+  top: 7%;
+  right: 6%;
+  animation: float2 11s ease-in-out infinite;
+}
+.icon-headphones {
+  background-image: url('/headphones.svg');
+  bottom: 7%;
+  left: 7%;
+  animation: float3 13s ease-in-out infinite;
+}
+.icon-eq {
+  background-image: url('/equalizer.svg');
+  bottom: 7%;
+  right: 7%;
+  animation: float1 10s ease-in-out infinite reverse;
+}
+
+@keyframes float1 {
+  0% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) translateX(10px) rotate(5deg); }
+  100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+}
+
+@keyframes float2 {
+  0% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  50% { transform: translateY(15px) translateX(-15px) rotate(-3deg); }
+  100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+}
+
+@keyframes float3 {
+  0% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) translateX(-8px) rotate(2deg); }
+  100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+}
+
+/* Scrollbar estilizada */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
