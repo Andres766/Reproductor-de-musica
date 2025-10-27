@@ -281,6 +281,7 @@ export default function MusicPlayer() {
     if (!ctx || !analyser) return;
     if (ctx.state === 'suspended') ctx.resume();
     const data = new Uint8Array(analyser.frequencyBinCount);
+    let prevAmp = 0; // memoria simple para detectar pulso/beat
     const loop = () => {
       analyser.getByteFrequencyData(data);
       const bassBins = Math.max(1, Math.floor(data.length * 0.1));
@@ -289,14 +290,31 @@ export default function MusicPlayer() {
       const bassEnergy = bassSum / (bassBins * 255);
       const icons = document.querySelectorAll('.floating-icons .floating-icon') as NodeListOf<HTMLElement>;
       const now = Date.now() / 1000;
+      const amp = Math.max(0, bassEnergy - 0.03); // umbral aún más bajo para mayor reacción
+      const beat = Math.max(0, amp - prevAmp * 0.82); // pulso más sensible ante subidas de energía
+      const strong = beat > 0.12 ? 1 : 0; // acento en beats fuertes
       icons.forEach((el, i) => {
-        const phase = Math.sin(now + i * 0.6);
-        const scale = 1 + bassEnergy * 0.25 + phase * 0.02;
-        const tx = phase * 8;
-        const ty = Math.cos(now * 0.7 + i) * 6;
-        el.style.transform = `translateY(${ty.toFixed(2)}px) translateX(${tx.toFixed(2)}px) scale(${scale.toFixed(3)}) rotate(${(phase * 4).toFixed(2)}deg)`;
-        el.style.opacity = `${Math.min(0.7, 0.35 + bassEnergy * 0.4).toFixed(2)}`;
+        const phase = Math.sin(now + i * 0.5);
+        const scale = 1 + amp * 0.65 + beat * 0.6 + strong * 0.08 + phase * 0.022;
+        const txRaw = phase * (10 + amp * 16 + beat * 12 + strong * 6);
+        const tyRaw = Math.cos(now * 0.62 + i) * (10 + amp * 16 + beat * 12 + strong * 6);
+        const maxOffset = 14 + amp * 6 + strong * 4; // limitar movimiento para no salir de la esquina
+        const tx = Math.max(-maxOffset, Math.min(maxOffset, txRaw));
+        const ty = Math.max(-maxOffset, Math.min(maxOffset, tyRaw));
+        el.style.transform = `translateY(${ty.toFixed(2)}px) translateX(${tx.toFixed(2)}px) scale(${scale.toFixed(3)}) rotate(${(phase * 6.5).toFixed(2)}deg)`;
+        el.style.opacity = `${Math.min(0.96, 0.38 + amp * 0.8 + beat * 0.35 + strong * 0.08).toFixed(2)}`;
+        // Color reactivo solo en algunos íconos (globe, window, file, equalizer)
+        const colorize = el.classList.contains('icon-globe') || el.classList.contains('icon-window') || el.classList.contains('icon-file') || el.classList.contains('icon-equalizer');
+        const baseHue = (i * 45) % 360;
+        const hue = (baseHue + beat * 220 + amp * 90) % 360;
+        const sat = 1 + amp * 0.8 + strong * 0.3;
+        const bright = 1 + beat * 0.25 + strong * 0.15;
+        const shadow = strong ? 'drop-shadow(0 0 20px rgba(255,255,255,0.42))' : 'drop-shadow(0 0 12px rgba(255,255,255,0.28))';
+        el.style.filter = colorize
+          ? `hue-rotate(${hue.toFixed(0)}deg) saturate(${sat.toFixed(2)}) brightness(${bright.toFixed(2)}) ${shadow}`
+          : shadow;
       });
+      prevAmp = amp;
       rafRef.current = requestAnimationFrame(loop);
     };
     if (!rafRef.current) rafRef.current = requestAnimationFrame(loop);
@@ -322,17 +340,21 @@ export default function MusicPlayer() {
   const currentSong = songs[currentSongIndex];
 
   return (
-    <div className="min-h-screen p-6 flex items-center justify-center relative">
+    <div className="min-h-screen p-3 flex items-center justify-center relative">
       <div className="simple-bg"></div>
       <div className="floating-icons">
-        <div className="floating-icon icon-note"></div>
-        <div className="floating-icon icon-vinyl"></div>
-        <div className="floating-icon icon-headphones"></div>
-        <div className="floating-icon icon-eq"></div>
+        <div className="floating-icon icon-mic"></div>
+        <div className="floating-icon icon-speaker"></div>
+        <div className="floating-icon icon-guitar"></div>
+        <div className="floating-icon icon-playlist"></div>
+        <div className="floating-icon icon-globe"></div>
+        <div className="floating-icon icon-window"></div>
+        <div className="floating-icon icon-file"></div>
+        <div className="floating-icon icon-equalizer"></div>
       </div>
          <div className="w-full max-w-7xl relative z-10">
             {/* Barra de Búsqueda global arriba */}
-            <div className="relative mb-6">
+            <div className="relative mb-3">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
               <input
                 type="text"
@@ -342,7 +364,7 @@ export default function MusicPlayer() {
                 className="w-full bg-white/10 border border-white/20 rounded-xl pl-12 pr-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-purple-400 transition-all"
               />
             </div>
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Sidebar de Playlists */}
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20 lg:col-span-1">
             <div className="flex items-center justify-between mb-6">
@@ -450,7 +472,7 @@ export default function MusicPlayer() {
           {/* Player y Lista de Reproducción */}
           <div className="lg:col-span-2 space-y-6">
             {/* Player Principal */}
-            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-4 shadow-2xl border border-white/20">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -462,8 +484,8 @@ export default function MusicPlayer() {
               </div>
 
               {/* Album Art */}
-              <div className="relative mb-6 group">
-                <div className="w-full aspect-video max-w-2xl mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
+              <div className="relative mb-3 group">
+                <div className="w-full aspect-[3/2] max-w-lg mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-xl flex items-center justify-center overflow-hidden">
                   {currentSong ? (
                     <div className="text-center p-8">
                       <Music className="w-24 h-24 text-white/80 mx-auto mb-4 animate-pulse" />
@@ -560,7 +582,7 @@ export default function MusicPlayer() {
             </div>
 
             {/* Lista de Canciones */}
-            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-white/20">
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-4 shadow-2xl border border-white/20">
               {/* Songs List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                 {filteredSongs.length > 0 ? (
@@ -596,7 +618,7 @@ export default function MusicPlayer() {
                     );
                   })
                 ) : (
-                  <div className="text-center py-12">
+                  <div className="text-center py-4">
                     <Music className="w-16 h-16 text-white/30 mx-auto mb-4" />
                     <p className="text-white/50">
                       {searchQuery ? 'No se encontraron canciones' : 'Agrega canciones para empezar'}

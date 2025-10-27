@@ -61,8 +61,8 @@ body {
 
 .floating-icon {
   position: absolute;
-  width: 64px;
-  height: 64px;
+  width: 46px;
+  height: 46px;
   background-size: contain;
   background-repeat: no-repeat;
   opacity: 0.4; /* sutil por defecto */
@@ -71,30 +71,58 @@ body {
 }
 
 /* Íconos temáticos de música */
-.icon-note {
-  background-image: url('/music-note.svg');
-  top: 6%;
-  left: 5%;
+.icon-mic { /* esquina superior izquierda */
+  background-image: url('/microphone.svg');
+  top: 1.5%;
+  left: 1.5%;
   animation: float1 9s ease-in-out infinite;
 }
-.icon-vinyl {
-  background-image: url('/vinyl.svg');
-  top: 7%;
-  right: 6%;
+.icon-speaker { /* esquina superior derecha */
+  background-image: url('/speaker.svg');
+  top: 1.5%;
+  right: 1.5%;
   animation: float2 11s ease-in-out infinite;
 }
-.icon-headphones {
-  background-image: url('/headphones.svg');
-  bottom: 7%;
-  left: 7%;
+.icon-guitar { /* esquina inferior izquierda */
+  background-image: url('/guitar.svg');
+  bottom: 1.5%;
+  left: 1.5%;
   animation: float3 13s ease-in-out infinite;
 }
-.icon-eq {
-  background-image: url('/equalizer.svg');
-  bottom: 7%;
-  right: 7%;
+.icon-playlist { /* esquina inferior derecha */
+  background-image: url('/playlist.svg');
+  bottom: 1.5%;
+  right: 1.5%;
   animation: float1 10s ease-in-out infinite reverse;
 }
+
+/* Íconos adicionales cerca de esquinas/edges, sin solapar contenido */
+.icon-globe { /* esquina superior izquierda (offset secundario) */
+  background-image: url('/globe.svg');
+  top: 4.5%;
+  left: 5%;
+  animation: float2 12s ease-in-out infinite;
+}
+.icon-window { /* esquina superior derecha (offset secundario) */
+  background-image: url('/window.svg');
+  top: 4.5%;
+  right: 5%;
+  animation: float3 14s ease-in-out infinite;
+}
+.icon-file { /* esquina inferior izquierda (offset secundario) */
+  background-image: url('/file.svg');
+  bottom: 4.5%;
+  left: 5%;
+  animation: float1 11s ease-in-out infinite;
+}
+.icon-equalizer { /* esquina inferior derecha (offset secundario) */
+  background-image: url('/equalizer.svg');
+  bottom: 4.5%;
+  right: 5%;
+  animation: float2 13s ease-in-out infinite;
+}
+
+/* Sin iconos extra dentro del contenido para evitar solapamiento */
 
 @keyframes float1 {
   0% { transform: translateY(0px) translateX(0px) rotate(0deg); }
